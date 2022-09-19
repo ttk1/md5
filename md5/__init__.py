@@ -1,1 +1,1 @@
-from md5.md5 import digest
+from md5.md5 import digest, MD5

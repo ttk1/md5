@@ -1,3 +1,4 @@
 .vscode/
 build/
 md5.egg-info/
+*.pyc
