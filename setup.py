@@ -13,7 +13,8 @@ with open('README.md', encoding='utf-8') as f:
 
 entry_points = {
     'console_scripts': [
-        'tmd5 = md5.__main__:main'
+        'tmd5 = md5.__main__:main',
+        'tmd4 = md5.__main__:main_md4'
     ]
 }
 

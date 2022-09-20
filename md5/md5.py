@@ -41,7 +41,7 @@ class MD5():
         ))
 
     def _update(self, data: bytes):
-        self._X = [data[i:i+4] for i in range(0, len(data), 4)]
+        self._X = [data[i:i+4] for i in range(0, 64, 4)]
         AA = self._A
         BB = self._B
         CC = self._C
