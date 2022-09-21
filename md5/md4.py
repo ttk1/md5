@@ -1,32 +1,24 @@
 class MD4():
     def __init__(self):
-        self._A = b'\x01\x23\x45\x67'
-        self._B = b'\x89\xab\xcd\xef'
-        self._C = b'\xfe\xdc\xba\x98'
-        self._D = b'\x76\x54\x32\x10'
-        self._current = b''
+        self._A = 0x67452301
+        self._B = 0xefcdab89
+        self._C = 0x98badcfe
+        self._D = 0x10325476
+        self._data = b''
         self._size = 0
 
-    def _f1(self, a: bytes, b: bytes, c: bytes, d: bytes, k: int, s: int):
-        return word_rotate(word_add(a, word_add(
-            F(b, c, d), self._X[k])),
-            s
-        )
+    def _f1(self, a: int, b: int, c: int, d: int, k: int, s: int):
+        return rotate((a + F(b, c, d) + self._X[k]) & 0xffffffff, s)
 
-    def _f2(self, a: bytes, b: bytes, c: bytes, d: bytes, k: int, s: int):
-        return word_rotate(word_add(a, word_add(
-            G(b, c, d), word_add(self._X[k], b'\x99\x79\x82\x5a'))),
-            s
-        )
+    def _f2(self, a: int, b: int, c: int, d: int, k: int, s: int):
+        return rotate((a + G(b, c, d) + self._X[k] + 0x5a827999) & 0xffffffff, s)
 
-    def _f3(self, a: bytes, b: bytes, c: bytes, d: bytes, k: int, s: int):
-        return word_rotate(word_add(a, word_add(
-            H(b, c, d), word_add(self._X[k], b'\xa1\xeb\xd9\x6e'))),
-            s
-        )
+    def _f3(self, a: int, b: int, c: int, d: int, k: int, s: int):
+        return rotate((a + H(b, c, d) + self._X[k] + 0x6ed9eba1) & 0xffffffff, s)
 
     def _update(self, data: bytes):
-        self._X = [data[i:i+4] for i in range(0, 64, 4)]
+        self._X = [int.from_bytes(data[i:i+4], byteorder='little')
+                   for i in range(0, 64, 4)]
         AA = self._A
         BB = self._B
         CC = self._C
@@ -86,63 +78,44 @@ class MD4():
         self._C = self._f3(self._C, self._D, self._A, self._B, 7, 11)
         self._B = self._f3(self._B, self._C, self._D, self._A, 15, 15)
 
-        self._A = word_add(self._A, AA)
-        self._B = word_add(self._B, BB)
-        self._C = word_add(self._C, CC)
-        self._D = word_add(self._D, DD)
+        self._A = (self._A + AA) & 0xffffffff
+        self._B = (self._B + BB) & 0xffffffff
+        self._C = (self._C + CC) & 0xffffffff
+        self._D = (self._D + DD) & 0xffffffff
 
     def update(self, data: bytes):
-        self._current += data
+        self._data += data
         self._size += len(data)
-        while len(self._current) >= 64:
-            self._update(self._current[0:64])
-            self._current = self._current[64:]
+        while len(self._data) >= 64:
+            self._update(self._data[0:64])
+            self._data = self._data[64:]
 
     def digest(self):
-        self._current += (b'\x80' +
-                          b'\00' * ((56 - (len(self._current) + 1)) % 64) +
-                          ((self._size * 8) % (2 ** 64)).to_bytes(8, byteorder='little'))
-        self._update(self._current[0:64])
-        if len(self._current) > 64:
-            self._update(self._current[64:128])
-        return self._A + self._B + self._C + self._D
+        self._data += (b'\x80' +
+                       b'\00' * ((56 - (len(self._data) + 1)) % 64) +
+                       ((self._size * 8) % (2 ** 64)).to_bytes(8, byteorder='little'))
+        self._update(self._data[0:64])
+        if len(self._data) > 64:
+            self._update(self._data[64:128])
+        return (
+            self._A.to_bytes(4, byteorder='little') +
+            self._B.to_bytes(4, byteorder='little') +
+            self._C.to_bytes(4, byteorder='little') +
+            self._D.to_bytes(4, byteorder='little')
+        )
 
 
-def F(X: bytes, Y: bytes, Z: bytes):
-    return word_or(word_and(X, Y), word_and(word_not(X), Z))
+def F(X: int, Y: int, Z: int):
+    return X & Y | ~X & 0xffffffff & Z
 
 
-def G(X: bytes, Y: bytes, Z: bytes):
-    return word_or(word_or(word_and(X, Y), word_and(X, Z)), word_and(Y, Z))
+def G(X: int, Y: int, Z: int):
+    return X & Y | X & Z | Y & Z
 
 
-def H(X: bytes, Y: bytes, Z: bytes):
-    return word_xor(word_xor(X, Y), Z)
+def H(X: int, Y: int, Z: int):
+    return X ^ Y ^ Z
 
 
-def word_add(a: bytes, b: bytes):
-    return ((int.from_bytes(a, byteorder='little') +
-             int.from_bytes(b, byteorder='little')) %
-            (2 ** 32)).to_bytes(4, byteorder='little')
-
-
-def word_and(a: bytes, b: bytes):
-    return bytes((a[i] & b[i]) for i in range(4))
-
-
-def word_or(a: bytes, b: bytes):
-    return bytes((a[i] | b[i]) for i in range(4))
-
-
-def word_xor(a: bytes, b: bytes):
-    return bytes((a[i] ^ b[i]) for i in range(4))
-
-
-def word_not(a: bytes):
-    return bytes(~a[i] & 0xff for i in range(4))
-
-
-def word_rotate(a: bytes, s: int):
-    return bytes((a[(i - s // 8) % 4] << s % 8 |
-                 a[(i - s // 8 - 1) % 4] >> (8 - s % 8)) & 0xff
-                 for i in range(4))
+def rotate(a: int, s: int):
+    return (a << s | a >> (32 - s)) & 0xffffffff
